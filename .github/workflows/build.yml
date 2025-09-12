@@ -2,7 +2,7 @@ name: Advanced Kernel Build Process
 permissions:
   contents: write
   actions: write
-  packages: read
+  packages: none
 
 on:
   workflow_call:
