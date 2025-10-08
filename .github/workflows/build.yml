@@ -159,26 +159,72 @@ jobs:
 
     - name: Setup Repo Tool
       run: |
-        curl -s https://storage.googleapis.com/git-repo-downloads/repo > ${{ env.TOOLS_DIR }}/repo
+        mkdir -p ${{ env.TOOLS_DIR }}
+        mkdir -p ${{ env.KERNEL_SRC_DIR }}
+        
+        # Download repo tool with error checking
+        echo "Downloading repo tool..."
+        if ! curl -L -o ${{ env.TOOLS_DIR }}/repo https://storage.googleapis.com/git-repo-downloads/repo; then
+          echo "Failed to download repo tool from primary source, trying alternative..."
+          curl -L -o ${{ env.TOOLS_DIR }}/repo https://gerrit.googlesource.com/git-repo/+/master/repo?format=TEXT | base64 -d > ${{ env.TOOLS_DIR }}/repo
+        fi
+        
+        # Verify the file was downloaded
+        if [ ! -f "${{ env.TOOLS_DIR }}/repo" ] || [ ! -s "${{ env.TOOLS_DIR }}/repo" ]; then
+          echo "Error: repo tool download failed or file is empty"
+          exit 1
+        fi
+        
         chmod a+x ${{ env.TOOLS_DIR }}/repo
         echo "${{ env.TOOLS_DIR }}" >> $GITHUB_PATH
+        
+        # Verify repo tool is working
+        ${{ env.TOOLS_DIR }}/repo --version
 
     - name: Initialize Kernel Repository
       run: |
         cd ${{ env.KERNEL_SRC_DIR }}
         
         BRANCH_NAME="${{ inputs.android_version }}-${{ inputs.kernel_version }}-${{ inputs.os_patch_level }}"
+        echo "Initializing repository for branch: common-${BRANCH_NAME}"
         
-        repo init --depth=1 \
+        # Initialize with error handling
+        if ! repo init --depth=1 \
           -u https://android.googlesource.com/kernel/manifest \
           -b common-${BRANCH_NAME} \
           --repo-rev=v2.16 \
-          --repo-url=https://gerrit.googlesource.com/git-repo
+          --repo-url=https://gerrit.googlesource.com/git-repo; then
+          echo "Failed to initialize repository for branch common-${BRANCH_NAME}"
+          echo "Available branches might be different. Checking manifest..."
+          exit 1
+        fi
+        
+        echo "Repository initialization completed successfully"
 
     - name: Sync Repository
       run: |
         cd ${{ env.KERNEL_SRC_DIR }}
-        repo sync -c -j$(nproc --all) --no-tags --fail-fast --force-sync
+        echo "Starting repository sync..."
+        
+        # Sync with error handling and retry logic
+        RETRY_COUNT=0
+        MAX_RETRIES=3
+        
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+          if repo sync -c -j$(nproc --all) --no-tags --fail-fast --force-sync; then
+            echo "Repository sync completed successfully"
+            break
+          else
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            echo "Sync attempt $RETRY_COUNT failed. Retrying in 30 seconds..."
+            if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+              sleep 30
+            else
+              echo "All sync attempts failed after $MAX_RETRIES tries"
+              exit 1
+            fi
+          fi
+        done
 
     - name: Detect Actual Sublevel
       id: detect-sublevel-final
@@ -442,12 +488,28 @@ jobs:
     if: always()
 
     steps:
+    - name: Install ccache
+      run: |
+        sudo apt update && sudo apt install -y ccache || echo "Failed to install ccache, continuing..."
+
     - name: Cleanup Workspace
       run: |
-        rm -rf ${{ env.KERNEL_SRC_DIR }}
-        rm -rf ${{ env.TOOLS_DIR }}
-        rm -rf kernel_build
-        ccache --clear --show-stats
+        echo "Starting workspace cleanup..."
+        
+        # Remove directories if they exist
+        [ -d "${{ env.KERNEL_SRC_DIR }}" ] && rm -rf ${{ env.KERNEL_SRC_DIR }} && echo "Removed kernel source directory"
+        [ -d "${{ env.TOOLS_DIR }}" ] && rm -rf ${{ env.TOOLS_DIR }} && echo "Removed tools directory"
+        [ -d "kernel_build" ] && rm -rf kernel_build && echo "Removed kernel build directory"
+        
+        # Clear ccache if available
+        if command -v ccache >/dev/null 2>&1; then
+          echo "Clearing ccache..."
+          ccache --clear --show-stats || echo "ccache clear failed, but continuing..."
+        else
+          echo "ccache not available, skipping cache cleanup"
+        fi
+        
+        echo "Workspace cleanup completed"
 
     - name: Upload Build Logs
       if: failure()
