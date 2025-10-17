@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2196F3">
+    <title>AWO OPR Fahrdienst</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192x192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+    
+    <!-- Leaflet CSS für OpenStreetMap -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <img src="icons/awo-logo.png" alt="AWO OPR" class="logo" onerror="this.style.display='none'">
+                <h1>AWO OPR Fahrdienst</h1>
+                <div class="connection-status" id="connectionStatus">
+                    <span class="status-indicator offline" id="statusIndicator"></span>
+                    <span id="statusText">Offline</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="bottom-nav" id="bottomNav">
+            <button class="nav-item active" data-tab="map">
+                <span class="nav-icon">🗺️</span>
+                <span class="nav-label">Karte</span>
+            </button>
+            <button class="nav-item" data-tab="trips">
+                <span class="nav-icon">🚗</span>
+                <span class="nav-label">Fahrten</span>
+            </button>
+            <button class="nav-item" data-tab="persons">
+                <span class="nav-icon">👥</span>
+                <span class="nav-label">Personen</span>
+            </button>
+            <button class="nav-item" data-tab="reports">
+                <span class="nav-icon">📄</span>
+                <span class="nav-label">Nachweise</span>
+            </button>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Karte Tab -->
+            <div id="mapTab" class="tab-content active">
+                <div class="map-container">
+                    <div id="map"></div>
+                    <div class="map-controls">
+                        <button id="centerLocationBtn" class="control-btn">
+                            <span class="btn-icon">📍</span>
+                            Standort
+                        </button>
+                        <button id="startTripBtn" class="control-btn primary">
+                            <span class="btn-icon">▶️</span>
+                            Fahrt starten
+                        </button>
+                        <button id="stopTripBtn" class="control-btn danger" style="display: none;">
+                            <span class="btn-icon">⏹️</span>
+                            Fahrt beenden
+                        </button>
+                    </div>
+                    <div class="trip-info" id="tripInfo" style="display: none;">
+                        <div class="info-item">
+                            <span class="label">Fahrtzeit:</span>
+                            <span id="tripDuration">00:00:00</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Distanz:</span>
+                            <span id="tripDistance">0.0 km</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fahrten Tab -->
+            <div id="tripsTab" class="tab-content">
+                <div class="tab-header">
+                    <h2>Fahrten</h2>
+                    <button id="newTripBtn" class="btn primary">
+                        <span class="btn-icon">➕</span>
+                        Neue Fahrt
+                    </button>
+                </div>
+                <div class="search-bar">
+                    <input type="text" id="tripSearch" placeholder="Fahrten suchen...">
+                </div>
+                <div id="tripsList" class="items-list">
+                    <!-- Fahrten werden hier dynamisch geladen -->
+                </div>
+            </div>
+
+            <!-- Personen Tab -->
+            <div id="personsTab" class="tab-content">
+                <div class="tab-header">
+                    <h2>Personen</h2>
+                    <button id="newPersonBtn" class="btn primary">
+                        <span class="btn-icon">➕</span>
+                        Person hinzufügen
+                    </button>
+                </div>
+                <div class="search-bar">
+                    <input type="text" id="personSearch" placeholder="Personen suchen...">
+                </div>
+                <div id="personsList" class="items-list">
+                    <!-- Personen werden hier dynamisch geladen -->
+                </div>
+            </div>
+
+            <!-- Nachweise Tab -->
+            <div id="reportsTab" class="tab-content">
+                <div class="tab-header">
+                    <h2>Nachweise</h2>
+                    <button id="generateReportBtn" class="btn primary">
+                        <span class="btn-icon">📄</span>
+                        Nachweis erstellen
+                    </button>
+                </div>
+                <div class="filter-bar">
+                    <select id="reportFilter">
+                        <option value="all">Alle Nachweise</option>
+                        <option value="today">Heute</option>
+                        <option value="week">Diese Woche</option>
+                        <option value="month">Dieser Monat</option>
+                    </select>
+                </div>
+                <div id="reportsList" class="items-list">
+                    <!-- Nachweise werden hier dynamisch geladen -->
+                </div>
+            </div>
+        </main>
+
+        <!-- Modals -->
+        <div id="modalOverlay" class="modal-overlay">
+            <div id="modalContent" class="modal-content">
+                <!-- Modal-Inhalte werden hier dynamisch geladen -->
+            </div>
+        </div>
+
+        <!-- Loading Spinner -->
+        <div id="loadingSpinner" class="loading-spinner" style="display: none;">
+            <div class="spinner"></div>
+            <p>Lädt...</p>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div id="toastContainer" class="toast-container"></div>
+    </div>
+
+    <!-- Cordova Script -->
+    <script type="text/javascript" src="cordova.js"></script>
+    
+    <!-- External Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <!-- App Scripts -->
+    <script src="js/database.js"></script>
+    <script src="js/models.js"></script>
+    <script src="js/gps.js"></script>
+    <script src="js/map.js"></script>
+    <script src="js/trip-tracker.js"></script>
+    <script src="js/timer.js"></script>
+    <script src="js/person-manager.js"></script>
+    <script src="js/pdf-generator.js"></script>
+    <script src="js/navigation.js"></script>
+    <script src="cordova-app.js"></script>
+    <script src="app.js"></script>
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(registration => {
+                        console.log('SW registered: ', registration);
+                    })
+                    .catch(registrationError => {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>

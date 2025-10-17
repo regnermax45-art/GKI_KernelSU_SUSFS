@@ -1,0 +1,66 @@
+{
+  "name": "awo-opr-fahrdienst",
+  "displayName": "AWO OPR Fahrdienst",
+  "version": "1.0.0",
+  "description": "Fahrdienst-App für die AWO Ostprignitz-Ruppin mit GPS-Tracking und Nachweiserstellung",
+  "main": "index.js",
+  "scripts": {
+    "build": "cordova build android",
+    "build-release": "cordova build android --release",
+    "run": "cordova run android",
+    "emulate": "cordova emulate android",
+    "prepare": "cordova prepare",
+    "clean": "cordova clean",
+    "requirements": "cordova requirements",
+    "platform-add": "cordova platform add android",
+    "platform-remove": "cordova platform remove android",
+    "plugin-add-all": "npm run plugin-add-core && npm run plugin-add-extras",
+    "plugin-add-core": "cordova plugin add cordova-plugin-whitelist cordova-plugin-statusbar cordova-plugin-device cordova-plugin-splashscreen",
+    "plugin-add-extras": "cordova plugin add cordova-plugin-geolocation cordova-plugin-file cordova-plugin-file-transfer cordova-plugin-network-information cordova-plugin-vibration cordova-plugin-dialogs cordova-plugin-inappbrowser cordova-plugin-x-toast"
+  },
+  "keywords": [
+    "cordova",
+    "android",
+    "fahrdienst",
+    "gps",
+    "tracking",
+    "awo",
+    "mobile"
+  ],
+  "author": "AWO Ostprignitz-Ruppin",
+  "license": "MIT",
+  "devDependencies": {
+    "cordova": "^12.0.0",
+    "cordova-android": "^11.0.0"
+  },
+  "cordova": {
+    "platforms": [
+      "android"
+    ],
+    "plugins": {
+      "cordova-plugin-whitelist": {},
+      "cordova-plugin-statusbar": {},
+      "cordova-plugin-device": {},
+      "cordova-plugin-splashscreen": {},
+      "cordova-plugin-geolocation": {
+        "GEOLOCATION_USAGE_DESCRIPTION": "Diese App benötigt Zugriff auf Ihren Standort für GPS-Tracking während der Fahrten."
+      },
+      "cordova-plugin-file": {},
+      "cordova-plugin-file-transfer": {},
+      "cordova-plugin-network-information": {},
+      "cordova-plugin-vibration": {},
+      "cordova-plugin-dialogs": {},
+      "cordova-plugin-inappbrowser": {},
+      "cordova-plugin-x-toast": {}
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/regnermax45-art/GKI_KernelSU_SUSFS.git"
+  },
+  "bugs": {
+    "url": "https://github.com/regnermax45-art/GKI_KernelSU_SUSFS/issues"
+  },
+  "homepage": "https://github.com/regnermax45-art/GKI_KernelSU_SUSFS#readme"
+}
+
