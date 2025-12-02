@@ -1,53 +1,39 @@
 # MaxRegner Android Kitchen Tool - Dependencies
-# GUI Framework
-PyQt6>=6.6.0
-PyQt6-tools>=6.6.0
+# GUI Framework - Use specific versions that have Windows wheels
+PyQt6==6.7.1
+PyQt6-Qt6==6.7.2
 
 # System and File Operations
 psutil>=5.9.0
-pathlib2>=2.3.7
 watchdog>=3.0.0
 
 # Archive and Compression
 py7zr>=0.20.0
-rarfile>=4.1
-zipfile38>=0.0.3
 
-# Binary Analysis and Manipulation
-pyelftools>=0.29
-construct>=2.10.68
-hexdump>=3.3
+# Binary Analysis and Manipulation (optional for basic functionality)
+# pyelftools>=0.29
+# construct>=2.10.68
 
-# Cryptography and Signing
+# Cryptography and Signing (simplified)
 cryptography>=41.0.0
-pycryptodome>=3.19.0
 
-# Android Specific Tools
-protobuf>=4.24.0
-lz4>=4.3.2
-zstandard>=0.21.0
+# Android Specific Tools (simplified)
+# protobuf>=4.24.0
+# lz4>=4.3.2
+# zstandard>=0.21.0
 
 # Image Processing
 Pillow>=10.0.0
 
 # Network and Downloads
 requests>=2.31.0
-urllib3>=2.0.0
 
 # Configuration and Data
 pyyaml>=6.0.1
-toml>=0.10.2
-configparser>=6.0.0
 
 # Logging and Progress
 tqdm>=4.66.0
-colorlog>=6.7.0
-
-# Development and Testing
-pytest>=7.4.0
-pytest-qt>=4.2.0
-black>=23.7.0
-flake8>=6.0.0
+colorama>=0.4.6
 
 # Platform Specific
 pywin32>=306; sys_platform == "win32"

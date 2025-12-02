@@ -12,9 +12,17 @@ import os
 import argparse
 import traceback
 from pathlib import Path
-from PyQt6.QtWidgets import QApplication, QMessageBox, QSplashScreen
-from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
-from PyQt6.QtGui import QPixmap, QFont, QPalette, QColor
+
+# Handle PyQt6 import with fallback
+try:
+    from PyQt6.QtWidgets import QApplication, QMessageBox, QSplashScreen
+    from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
+    from PyQt6.QtGui import QPixmap, QFont, QPalette, QColor
+    PYQT_AVAILABLE = True
+except ImportError as e:
+    print(f"PyQt6 not available: {e}")
+    print("Please install PyQt6 using: pip install PyQt6==6.7.1")
+    PYQT_AVAILABLE = False
 
 # Add the project root to Python path
 project_root = Path(__file__).parent.parent
@@ -276,6 +284,21 @@ Examples:
 
 def main():
     """Main entry point."""
+    # Check if PyQt6 is available
+    if not PYQT_AVAILABLE:
+        print("\n" + "="*60)
+        print("ERROR: PyQt6 is not installed or not working properly!")
+        print("="*60)
+        print("\nTo fix this on Windows, please run:")
+        print("1. pip install --upgrade pip")
+        print("2. pip install PyQt6==6.7.1")
+        print("\nIf you still have issues, try:")
+        print("3. pip install --only-binary=all PyQt6==6.7.1")
+        print("\nOr install from conda:")
+        print("4. conda install pyqt")
+        print("="*60)
+        sys.exit(1)
+    
     # Parse command line arguments
     args = parse_arguments()
     
@@ -294,6 +317,7 @@ def main():
         sys.exit(0)
     except Exception as e:
         print(f"Unexpected error: {e}", file=sys.stderr)
+        traceback.print_exc()
         sys.exit(1)
 
 

@@ -612,7 +612,23 @@ class MainWindow(QMainWindow):
     def open_output_folder(self):
         """Open output folder in file manager."""
         if self.output_path and Path(self.output_path).exists():
-            os.startfile(self.output_path)  # Windows
+            import platform
+            system = platform.system()
+            
+            try:
+                if system == "Windows":
+                    os.startfile(self.output_path)
+                elif system == "Darwin":  # macOS
+                    os.system(f'open "{self.output_path}"')
+                else:  # Linux and others
+                    os.system(f'xdg-open "{self.output_path}"')
+            except Exception as e:
+                self.logger.error(f"Failed to open output folder: {e}")
+                QMessageBox.warning(
+                    self, 
+                    "Error", 
+                    f"Could not open output folder:\n{self.output_path}\n\nError: {e}"
+                )
     
     def start_porting(self):
         """Start the porting process."""
@@ -651,4 +667,3 @@ class MainWindow(QMainWindow):
         
         self.config.save()
         event.accept()
-
