@@ -167,12 +167,14 @@ jobs:
 
     - name: Setup Repo Tool
       run: |
+        mkdir -p ${{ env.TOOLS_DIR }}
         curl -s https://storage.googleapis.com/git-repo-downloads/repo > ${{ env.TOOLS_DIR }}/repo
         chmod a+x ${{ env.TOOLS_DIR }}/repo
         echo "${{ env.TOOLS_DIR }}" >> $GITHUB_PATH
 
     - name: Initialize Kernel Repository
       run: |
+        mkdir -p ${{ env.KERNEL_SRC_DIR }}
         cd ${{ env.KERNEL_SRC_DIR }}
         
         BRANCH_NAME="${{ inputs.android_version }}-${{ inputs.kernel_version }}-${{ inputs.os_patch_level }}"
@@ -459,7 +461,11 @@ jobs:
         rm -rf ${{ env.KERNEL_SRC_DIR }}
         rm -rf ${{ env.TOOLS_DIR }}
         rm -rf kernel_build
-        ccache --clear --show-stats
+        if command -v ccache >/dev/null 2>&1; then
+          ccache --clear --show-stats
+        else
+          echo "ccache not available, skipping cache cleanup"
+        fi
 
     - name: Upload Build Logs
       if: failure()
