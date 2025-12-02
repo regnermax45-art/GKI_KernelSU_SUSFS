@@ -20,6 +20,66 @@ from PyQt6.QtGui import QAction, QIcon, QFont, QPixmap, QDragEnterEvent, QDropEv
 from maxregner_kitchen import APP_TITLE, get_version
 from maxregner_kitchen.config import KitchenConfig
 from maxregner_kitchen.utils.logger import KitchenLogger
+from maxregner_kitchen.utils.progress import ProgressTracker
+from maxregner_kitchen.porting.engine import PortingEngine
+from maxregner_kitchen.config.profiles import get_device_profile
+
+
+class PortingThread(QThread):
+    """Thread for running firmware porting process."""
+    
+    progress_updated = pyqtSignal(str, int)  # message, percentage
+    porting_finished = pyqtSignal(object)    # PortingResult
+    
+    def __init__(self, source_path, target_path, target_device, output_path, logger):
+        super().__init__()
+        self.source_path = Path(source_path)
+        self.target_path = Path(target_path) if target_path else None
+        self.target_device = target_device
+        self.output_path = Path(output_path)
+        self.logger = logger
+        self.progress_tracker = ProgressTracker()
+        self.porting_engine = PortingEngine(logger, self.progress_tracker)
+    
+    def run(self):
+        """Run the porting process in background thread."""
+        try:
+            # Get target device profile
+            target_profile = get_device_profile(self.target_device)
+            if not target_profile:
+                self.logger.error(f"Unknown target device: {self.target_device}")
+                return
+            
+            # Progress callback
+            def progress_callback(message, percentage):
+                self.progress_updated.emit(message, int(percentage))
+            
+            # Start porting
+            result = self.porting_engine.start_porting(
+                self.source_path,
+                self.target_path or self.source_path,  # Use source as target if no target specified
+                target_profile,
+                self.output_path,
+                progress_callback
+            )
+            
+            self.porting_finished.emit(result)
+            
+        except Exception as e:
+            self.logger.error(f"Porting thread error: {str(e)}")
+            # Create error result
+            from maxregner_kitchen.porting.engine import PortingResult
+            error_result = PortingResult(
+                success=False,
+                output_path=None,
+                source_info=None,
+                target_info=None,
+                ported_images={},
+                errors=[str(e)],
+                warnings=[],
+                processing_time=0.0
+            )
+            self.porting_finished.emit(error_result)
 
 
 class FirmwareInputWidget(QFrame):
@@ -202,6 +262,7 @@ class MainWindow(QMainWindow):
         self.firmware1_path = ""
         self.firmware2_path = ""
         self.output_path = ""
+        self.porting_thread = None
         
         self.setup_ui()
         self.setup_connections()
@@ -632,6 +693,18 @@ class MainWindow(QMainWindow):
     
     def start_porting(self):
         """Start the porting process."""
+        if not self.firmware1_path:
+            QMessageBox.warning(self, "Error", "Please select source firmware first")
+            return
+        
+        if not self.output_path:
+            QMessageBox.warning(self, "Error", "Please select output directory first")
+            return
+        
+        # Get target device from combo box
+        device_text = self.device_combo.currentText()
+        target_device = device_text.split('(')[1].split(')')[0]  # Extract codename
+        
         self.logger.info("Starting firmware porting process...")
         self.start_btn.setEnabled(False)
         self.pause_btn.setEnabled(True)
@@ -640,8 +713,73 @@ class MainWindow(QMainWindow):
         # Switch to processing tab
         self.tab_widget.setCurrentIndex(1)
         
-        # TODO: Implement actual porting logic
+        # Create and start porting thread
+        self.porting_thread = PortingThread(
+            self.firmware1_path,
+            self.firmware2_path if self.firmware2_path else None,
+            target_device,
+            self.output_path,
+            self.logger
+        )
+        
+        # Connect thread signals
+        self.porting_thread.progress_updated.connect(self.on_progress_updated)
+        self.porting_thread.porting_finished.connect(self.on_porting_finished)
+        
+        # Start the thread
+        self.porting_thread.start()
         self.logger.info("Porting process started successfully")
+    
+    def on_progress_updated(self, message: str, percentage: int):
+        """Handle progress updates from porting thread."""
+        self.progress_widget.update_progress(percentage, message)
+        self.logger.info(f"Progress: {percentage}% - {message}")
+    
+    def on_porting_finished(self, result):
+        """Handle porting completion."""
+        # Re-enable buttons
+        self.start_btn.setEnabled(True)
+        self.pause_btn.setEnabled(False)
+        self.stop_btn.setEnabled(False)
+        
+        if result.success:
+            self.logger.info(f"Porting completed successfully in {result.processing_time:.1f}s")
+            self.progress_widget.update_progress(100, "Porting completed successfully!")
+            
+            # Show success message
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setWindowTitle("Porting Complete")
+            msg.setText("Firmware porting completed successfully!")
+            msg.setDetailedText(f"""
+Output directory: {result.output_path}
+Processing time: {result.processing_time:.1f} seconds
+Ported images: {', '.join(result.ported_images.keys())}
+
+Warnings: {len(result.warnings)}
+""")
+            msg.exec()
+            
+        else:
+            self.logger.error(f"Porting failed with {len(result.errors)} errors")
+            self.progress_widget.update_progress(0, "Porting failed")
+            
+            # Show error message
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Critical)
+            msg.setWindowTitle("Porting Failed")
+            msg.setText("Firmware porting failed!")
+            msg.setDetailedText(f"""
+Errors:
+{chr(10).join(result.errors)}
+
+Warnings:
+{chr(10).join(result.warnings)}
+""")
+            msg.exec()
+        
+        # Clean up thread
+        self.porting_thread = None
     
     def show_about(self):
         """Show about dialog."""
