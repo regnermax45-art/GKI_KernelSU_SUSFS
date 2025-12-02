@@ -1,7 +1,7 @@
 @echo off
 echo ========================================
 echo MaxRegner Android Kitchen Tool
-echo Starting Application...
+echo Simple Launcher (Skip Tests)
 echo ========================================
 echo.
 
@@ -14,19 +14,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Test imports first (optional)
-echo Testing imports...
-python test_imports.py
-if errorlevel 1 (
-    echo.
-    echo Some imports failed. Please check the installation.
-    echo Try running install_windows.bat again.
-    pause
-    exit /b 1
-)
-
-echo.
-REM Run the application
+REM Run the application directly
 echo Starting MaxRegner Kitchen Tool...
 python -m maxregner_kitchen.main
 
@@ -35,5 +23,8 @@ if errorlevel 1 (
     echo.
     echo Application exited with an error.
     echo Check the error messages above.
+    echo.
+    echo Try running: python test_imports.py
+    echo to check for import issues.
     pause
 )
