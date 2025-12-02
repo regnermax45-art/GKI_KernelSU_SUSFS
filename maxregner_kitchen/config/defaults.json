@@ -1,0 +1,214 @@
+{
+  "application": {
+    "theme": "dark",
+    "language": "en",
+    "auto_save": true,
+    "backup_enabled": true,
+    "max_backups": 5,
+    "temp_cleanup": true,
+    "parallel_processing": true,
+    "max_threads": 4
+  },
+  "ui": {
+    "window_geometry": {
+      "width": 1400,
+      "height": 900,
+      "x": 100,
+      "y": 100
+    },
+    "splitter_sizes": [300, 800, 300],
+    "show_tooltips": true,
+    "animations_enabled": true,
+    "transparency_effects": true,
+    "font_size": 9,
+    "icon_size": 24
+  },
+  "firmware": {
+    "extraction_path": "./extracted",
+    "output_path": "./output", 
+    "temp_path": "./temp",
+    "verify_checksums": true,
+    "preserve_timestamps": true,
+    "compression_level": 6,
+    "auto_detect_format": true
+  },
+  "porting": {
+    "merge_strategy": "intelligent",
+    "conflict_resolution": "prompt",
+    "preserve_signatures": false,
+    "update_build_props": true,
+    "patch_sepolicy": true,
+    "optimize_images": true,
+    "remove_bloatware": false,
+    "custom_modifications": []
+  },
+  "security": {
+    "verify_signatures": true,
+    "allow_unsigned": false,
+    "custom_keys_path": "./keys",
+    "sign_output": true,
+    "avb_enabled": true,
+    "dm_verity": false
+  },
+  "logging": {
+    "level": "INFO",
+    "file_logging": true,
+    "console_logging": true,
+    "max_log_size": "10MB",
+    "log_rotation": true,
+    "detailed_progress": true
+  },
+  "tools": {
+    "adb_path": "adb",
+    "fastboot_path": "fastboot", 
+    "java_path": "java",
+    "python_path": "python3",
+    "7zip_path": "7z",
+    "payload_dumper": "./tools/payload-dumper-go",
+    "avbroot": "./tools/avbroot",
+    "magiskboot": "./tools/magiskboot"
+  },
+  "device_profiles": {
+    "pixel_7_pro": {
+      "codename": "cheetah",
+      "arch": "arm64",
+      "api_level": 33,
+      "security_patch": "2023-12-05",
+      "bootloader": "cheetah-1.0",
+      "radio": "g5123b-114922-230831-B-10191138",
+      "partitions": {
+        "system": 3221225472,
+        "vendor": 805306368,
+        "product": 536870912,
+        "system_ext": 268435456,
+        "boot": 67108864,
+        "dtbo": 8388608,
+        "vbmeta": 65536
+      },
+      "features": [
+        "avb",
+        "dm_verity", 
+        "apex",
+        "dynamic_partitions",
+        "virtual_ab"
+      ]
+    },
+    "pixel_7": {
+      "codename": "panther",
+      "arch": "arm64", 
+      "api_level": 33,
+      "security_patch": "2023-12-05",
+      "bootloader": "panther-1.0",
+      "radio": "g5123b-114922-230831-B-10191138",
+      "partitions": {
+        "system": 3221225472,
+        "vendor": 805306368,
+        "product": 536870912,
+        "system_ext": 268435456,
+        "boot": 67108864,
+        "dtbo": 8388608,
+        "vbmeta": 65536
+      },
+      "features": [
+        "avb",
+        "dm_verity",
+        "apex", 
+        "dynamic_partitions",
+        "virtual_ab"
+      ]
+    },
+    "pixel_6_pro": {
+      "codename": "raven",
+      "arch": "arm64",
+      "api_level": 33,
+      "security_patch": "2023-12-05", 
+      "bootloader": "slider-1.0",
+      "radio": "g5123b-114922-230831-B-10191138",
+      "partitions": {
+        "system": 3221225472,
+        "vendor": 805306368,
+        "product": 536870912,
+        "system_ext": 268435456,
+        "boot": 67108864,
+        "dtbo": 8388608,
+        "vbmeta": 65536
+      },
+      "features": [
+        "avb",
+        "dm_verity",
+        "apex",
+        "dynamic_partitions", 
+        "virtual_ab"
+      ]
+    },
+    "pixel_6": {
+      "codename": "oriole",
+      "arch": "arm64",
+      "api_level": 33,
+      "security_patch": "2023-12-05",
+      "bootloader": "slider-1.0", 
+      "radio": "g5123b-114922-230831-B-10191138",
+      "partitions": {
+        "system": 3221225472,
+        "vendor": 805306368,
+        "product": 536870912,
+        "system_ext": 268435456,
+        "boot": 67108864,
+        "dtbo": 8388608,
+        "vbmeta": 65536
+      },
+      "features": [
+        "avb",
+        "dm_verity",
+        "apex",
+        "dynamic_partitions",
+        "virtual_ab"
+      ]
+    }
+  },
+  "porting_presets": {
+    "basic_port": {
+      "name": "Basic Port",
+      "description": "Simple firmware porting with minimal modifications",
+      "merge_system": true,
+      "merge_vendor": true,
+      "merge_product": false,
+      "update_props": true,
+      "patch_sepolicy": false,
+      "custom_mods": []
+    },
+    "advanced_port": {
+      "name": "Advanced Port", 
+      "description": "Full firmware port with advanced features",
+      "merge_system": true,
+      "merge_vendor": true,
+      "merge_product": true,
+      "update_props": true,
+      "patch_sepolicy": true,
+      "optimize_images": true,
+      "custom_mods": [
+        "remove_bloatware",
+        "add_root_support",
+        "enable_debugging"
+      ]
+    },
+    "custom_rom": {
+      "name": "Custom ROM",
+      "description": "Create fully customized ROM with MaxRegner features",
+      "merge_system": true,
+      "merge_vendor": true,
+      "merge_product": true,
+      "update_props": true,
+      "patch_sepolicy": true,
+      "optimize_images": true,
+      "add_magisk": true,
+      "add_kernelsu": true,
+      "custom_mods": [
+        "maxregner_ui",
+        "performance_tweaks",
+        "privacy_enhancements",
+        "gaming_optimizations"
+      ]
+    }
+  }
+}

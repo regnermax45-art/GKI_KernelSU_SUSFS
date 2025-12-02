@@ -1,0 +1,18 @@
+# Minimal requirements for MaxRegner Kitchen Tool (Windows-friendly)
+# Core GUI Framework
+PyQt6==6.7.1
+
+# Essential System Operations
+psutil>=5.9.0
+
+# Basic File Operations
+Pillow>=10.0.0
+requests>=2.31.0
+pyyaml>=6.0.1
+
+# Progress and Logging
+tqdm>=4.66.0
+colorama>=0.4.6
+
+# Windows Support
+pywin32>=306; sys_platform == "win32"
