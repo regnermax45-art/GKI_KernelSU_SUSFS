@@ -11,7 +11,15 @@ import shutil
 from pathlib import Path
 from typing import Dict, Any, Optional, Union
 from dataclasses import dataclass, asdict
-from PyQt6.QtCore import QSettings, QStandardPaths
+# Handle PyQt6 import with fallback
+try:
+    from PyQt6.QtCore import QSettings, QStandardPaths
+    PYQT_AVAILABLE = True
+except ImportError:
+    # Fallback for when PyQt6 is not available
+    QSettings = None
+    QStandardPaths = None
+    PYQT_AVAILABLE = False
 
 
 @dataclass
@@ -113,15 +121,24 @@ class ConfigManager:
     
     def __init__(self, app_name: str = "MaxRegnerKitchen"):
         self.app_name = app_name
-        self.settings = QSettings(QSettings.Format.IniFormat, 
-                                 QSettings.Scope.UserScope,
-                                 "MaxRegner", app_name)
         
-        # Set up configuration directories
-        self.config_dir = Path(QStandardPaths.writableLocation(
-            QStandardPaths.StandardLocation.AppConfigLocation))
+        if PYQT_AVAILABLE and QSettings and QStandardPaths:
+            self.settings = QSettings(QSettings.Format.IniFormat, 
+                                     QSettings.Scope.UserScope,
+                                     "MaxRegner", app_name)
+            
+            # Set up configuration directories
+            self.config_dir = Path(QStandardPaths.writableLocation(
+                QStandardPaths.StandardLocation.AppConfigLocation))
+        else:
+            # Fallback when PyQt6 is not available
+            self.settings = None
+            # Use a simple config directory in user home
+            import os
+            home_dir = Path.home()
+            self.config_dir = home_dir / ".maxregner_kitchen"
+        
         self.config_dir.mkdir(parents=True, exist_ok=True)
-        
         self.config_file = self.config_dir / "config.json"
         self.backup_dir = self.config_dir / "backups"
         self.backup_dir.mkdir(exist_ok=True)
