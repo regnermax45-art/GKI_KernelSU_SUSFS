@@ -157,6 +157,14 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Create Directory Structure
+      run: |
+        mkdir -p ${{ env.BUILD_ARTIFACTS_DIR }}
+        mkdir -p ${{ env.KERNEL_SRC_DIR }}
+        mkdir -p ${{ env.TOOLS_DIR }}
+        mkdir -p ${{ env.CACHE_DIR }}/ccache
+        mkdir -p ${{ env.CACHE_DIR }}/repo
+
     - name: Setup Repo Tool
       run: |
         curl -s https://storage.googleapis.com/git-repo-downloads/repo > ${{ env.TOOLS_DIR }}/repo
@@ -442,6 +450,10 @@ jobs:
     if: always()
 
     steps:
+    - name: Install ccache
+      run: |
+        sudo apt update && sudo apt install -y ccache
+
     - name: Cleanup Workspace
       run: |
         rm -rf ${{ env.KERNEL_SRC_DIR }}
