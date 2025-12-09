@@ -40,9 +40,82 @@ env:
   CACHE_DIR: ${{ github.workspace }}/.cache
 
 jobs:
+  check-changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      kernel-changes: ${{ steps.changes.outputs.kernel-changes }}
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Check for kernel-related changes
+      id: changes
+      run: |
+        # Check if this is a workflow_dispatch or if there are kernel-related changes
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "kernel-changes=true" >> $GITHUB_OUTPUT
+          echo "Workflow dispatch detected, will build kernels"
+          exit 0
+        fi
+        
+        # Get the list of changed files
+        if [ "${{ github.event_name }}" = "push" ]; then
+          if [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }}..${{ github.event.after }})
+          else
+            # First push to branch
+            CHANGED_FILES=$(git diff --name-only HEAD~1..HEAD)
+          fi
+        else
+          # For pull requests
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}..HEAD)
+        fi
+        
+        echo "Changed files:"
+        echo "$CHANGED_FILES"
+        
+        # Check if any kernel-related files were changed
+        KERNEL_CHANGES=false
+        while IFS= read -r file; do
+          case "$file" in
+            *.c|*.h|*.S|*.s|*.cpp|*.cc|*.cxx)
+              echo "Kernel source file changed: $file"
+              KERNEL_CHANGES=true
+              break
+              ;;
+            Makefile|Kconfig*|*.mk)
+              echo "Build file changed: $file"
+              KERNEL_CHANGES=true
+              break
+              ;;
+            arch/|drivers/|fs/|kernel/|mm/|net/|security/|sound/|crypto/|block/|ipc/|init/|lib/|scripts/|tools/|include/)
+              echo "Kernel directory changed: $file"
+              KERNEL_CHANGES=true
+              break
+              ;;
+            .github/workflows/build.yml)
+              echo "Build workflow changed: $file"
+              KERNEL_CHANGES=true
+              break
+              ;;
+          esac
+        done <<< "$CHANGED_FILES"
+        
+        echo "kernel-changes=$KERNEL_CHANGES" >> $GITHUB_OUTPUT
+        if [ "$KERNEL_CHANGES" = "true" ]; then
+          echo "Kernel-related changes detected, will build kernels"
+        else
+          echo "No kernel-related changes detected, skipping kernel build"
+        fi
+
   setup-environment:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    needs: check-changes
+    if: needs.check-changes.outputs.kernel-changes == 'true'
     outputs:
       config_name: ${{ steps.set-config.outputs.config_name }}
       actual_sublevel: ${{ steps.detect-sublevel.outputs.actual_sublevel }}
@@ -92,7 +165,12 @@ jobs:
         echo "CCACHE_DIR=${{ env.CACHE_DIR }}/ccache" >> $GITHUB_ENV
         echo "CCACHE_MAXSIZE=10G" >> $GITHUB_ENV
         echo "CCACHE_COMPRESS=1" >> $GITHUB_ENV
-        ccache --show-stats
+        # Only run ccache commands if ccache is available
+        if command -v ccache >/dev/null 2>&1; then
+          ccache --show-stats
+        else
+          echo "ccache not available, skipping stats"
+        fi
 
     - name: Detect Actual Sublevel for LTS
       id: detect-sublevel
@@ -133,6 +211,15 @@ jobs:
         IFS=',' read -ra DEVICES <<< "${{ inputs.target_devices }}"
         IFS=',' read -ra BUILD_VARIANTS <<< "${{ inputs.build_variants }}"
         
+        # Ensure we have at least one device and variant
+        if [ ${#DEVICES[@]} -eq 0 ] || [ "${DEVICES[0]}" = "" ]; then
+          DEVICES=("generic")
+        fi
+        
+        if [ ${#BUILD_VARIANTS[@]} -eq 0 ] || [ "${BUILD_VARIANTS[0]}" = "" ]; then
+          BUILD_VARIANTS=("all")
+        fi
+        
         for device in "${DEVICES[@]}"; do
           for build_type in "${BUILD_TYPES[@]}"; do
             for variant in "${BUILD_VARIANTS[@]}"; do
@@ -141,13 +228,22 @@ jobs:
           done
         done
         
-        MATRIX_JSON=$(printf '%s\n' "${VARIANTS[@]}" | jq -sc '.')
+        # Create JSON matrix using printf and basic string manipulation
+        if [ ${#VARIANTS[@]} -gt 0 ]; then
+          MATRIX_JSON="[$(IFS=','; echo "${VARIANTS[*]}")]"
+        else
+          # Fallback matrix if generation fails
+          MATRIX_JSON='[{"device":"generic", "build_type":"bazel", "variant":"all"}]'
+        fi
+        
+        echo "Generated matrix: $MATRIX_JSON"
         echo "build_matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
   sync-sources:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    needs: setup-environment
+    needs: [check-changes, setup-environment]
+    if: needs.check-changes.outputs.kernel-changes == 'true'
     outputs:
       actual_sublevel: ${{ steps.detect-sublevel-final.outputs.actual_sublevel }}
 
@@ -202,10 +298,18 @@ jobs:
           echo "actual_sublevel=${{ inputs.sub_level }}" >> $GITHUB_OUTPUT
         fi
 
+    - name: Upload Kernel Sources
+      uses: actions/upload-artifact@v4
+      with:
+        name: kernel-sources-${{ inputs.android_version }}-${{ inputs.kernel_version }}
+        path: ${{ env.KERNEL_SRC_DIR }}
+        retention-days: 1
+
   build-kernel:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
-    needs: [setup-environment, sync-sources]
+    needs: [check-changes, setup-environment, sync-sources]
+    if: needs.check-changes.outputs.kernel-changes == 'true'
     strategy:
       matrix: ${{ fromJson(needs.setup-environment.outputs.build_matrix) }}
 
@@ -215,10 +319,35 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Create Directory Structure
+      run: |
+        mkdir -p ${{ env.BUILD_ARTIFACTS_DIR }}
+        mkdir -p ${{ env.KERNEL_SRC_DIR }}
+        mkdir -p ${{ env.TOOLS_DIR }}
+        mkdir -p ${{ env.CACHE_DIR }}
+
+    - name: Download Kernel Sources
+      uses: actions/download-artifact@v4
+      with:
+        name: kernel-sources-${{ inputs.android_version }}-${{ inputs.kernel_version }}
+        path: ${{ env.KERNEL_SRC_DIR }}
+        
     - name: Restore Workspace
       run: |
-        cp -r ${{ env.KERNEL_SRC_DIR }}/* .
-        mv ${{ needs.setup-environment.outputs.config_name }} kernel_build
+        # Check if kernel source directory exists and has content
+        if [ -d "${{ env.KERNEL_SRC_DIR }}" ] && [ "$(ls -A ${{ env.KERNEL_SRC_DIR }})" ]; then
+          echo "Restoring kernel sources from ${{ env.KERNEL_SRC_DIR }}"
+          cp -r ${{ env.KERNEL_SRC_DIR }}/* .
+        else
+          echo "Kernel source directory not found or empty, will sync sources in next steps"
+        fi
+        
+        # Create kernel_build directory if it doesn't exist
+        if [ -n "${{ needs.setup-environment.outputs.config_name }}" ] && [ -d "${{ needs.setup-environment.outputs.config_name }}" ]; then
+          mv "${{ needs.setup-environment.outputs.config_name }}" kernel_build
+        else
+          mkdir -p kernel_build
+        fi
 
     - name: Setup Build Tools
       run: |
@@ -407,8 +536,8 @@ jobs:
   create-release:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    needs: build-kernel
-    if: success()
+    needs: [check-changes, build-kernel]
+    if: needs.check-changes.outputs.kernel-changes == 'true' && success()
 
     steps:
     - name: Download All Artifacts
@@ -445,8 +574,8 @@ jobs:
   cleanup:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    needs: [setup-environment, sync-sources, build-kernel]
-    if: always()
+    needs: [check-changes, setup-environment, sync-sources, build-kernel]
+    if: always() && needs.check-changes.outputs.kernel-changes == 'true'
 
     steps:
     - name: Cleanup Workspace
@@ -470,3 +599,38 @@ jobs:
           **/*.log
           **/out/**/*.log
         retention-days: 3
+
+  workflow-complete:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    needs: [check-changes, setup-environment, sync-sources, build-kernel, create-release, cleanup]
+    if: always()
+    steps:
+    - name: Workflow Summary
+      run: |
+        echo "## Workflow Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ needs.check-changes.outputs.kernel-changes }}" = "true" ]; then
+          echo "✅ Kernel-related changes detected" >> $GITHUB_STEP_SUMMARY
+          echo "🔨 Kernel build jobs executed" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.build-kernel.result }}" = "success" ]; then
+            echo "✅ Kernel build completed successfully" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.build-kernel.result }}" = "failure" ]; then
+            echo "❌ Kernel build failed" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.build-kernel.result }}" = "skipped" ]; then
+            echo "⏭️ Kernel build was skipped" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "ℹ️ No kernel-related changes detected" >> $GITHUB_STEP_SUMMARY
+          echo "⏭️ Kernel build jobs skipped (this is normal for non-kernel changes)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This PR contains changes to:" >> $GITHUB_STEP_SUMMARY
+          echo "- Documentation files (*.md)" >> $GITHUB_STEP_SUMMARY
+          echo "- Python scripts (*.py)" >> $GITHUB_STEP_SUMMARY
+          echo "- Other non-kernel files" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Workflow completed successfully! ✅" >> $GITHUB_STEP_SUMMARY
