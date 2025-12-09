@@ -13,9 +13,20 @@ import os
 from typing import Dict, Optional, Any
 
 class MotorolaOTAChecker:
-    def __init__(self):
+    def __init__(self, force_android_version=None):
         self.cds_url = "https://moto-cds.appspot.com/cds/upgrade/1/check/ctx/ota/key"
         self.device_props = {}
+        self.force_android_version = force_android_version
+        
+        # Android version mappings for forcing specific versions
+        self.android_version_map = {
+            "15": "15",
+            "14": "14", 
+            "13": "13",
+            "12": "12",
+            "11": "11",
+            "10": "10"
+        }
         
     def run_adb_command(self, command: str) -> str:
         """Run an ADB command and return the output."""
@@ -82,6 +93,12 @@ class MotorolaOTAChecker:
     
     def build_api_payload(self, device_info: Dict[str, Any]) -> Dict[str, Any]:
         """Build the JSON payload for the Motorola CDS API."""
+        # Use forced Android version if specified, otherwise use device's current version
+        os_version = device_info['os_version']
+        if self.force_android_version:
+            os_version = self.android_version_map.get(self.force_android_version, device_info['os_version'])
+            print(f"🔧 Forcing Android version: {os_version} (requested: {self.force_android_version})")
+        
         return {
             "id": device_info['serial'],
             "contentTimestamp": 0,
@@ -92,7 +109,7 @@ class MotorolaOTAChecker:
                 "product": device_info['product'],
                 "device": device_info['device'],
                 "hardware": device_info['hardware'],
-                "osVersion": device_info['os_version'],
+                "osVersion": os_version,
                 "buildId": device_info['build_id']
             },
             "extraInfo": {},
@@ -115,28 +132,146 @@ class MotorolaOTAChecker:
         # Build the payload
         payload = self.build_api_payload(device_info)
         
-        # Headers
+        # Headers - Update User-Agent based on target Android version
+        android_version = payload['deviceInfo']['osVersion']
         headers = {
             "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; Motorola) AppleWebKit/537.36"
+            "User-Agent": f"Mozilla/5.0 (Linux; Android {android_version}; Motorola) AppleWebKit/537.36"
         }
         
         try:
             print(f"📡 Sending request to: {full_url}")
+            if self.force_android_version:
+                print(f"🎯 Requesting updates for Android {android_version}")
+            
             response = requests.post(full_url, json=payload, headers=headers, timeout=30)
             
             print(f"📊 Response status: {response.status_code}")
             
             if response.status_code == 200:
-                return response.json()
+                result = response.json()
+                
+                # If forcing Android 15 and no updates found, try alternative approaches
+                if (self.force_android_version == "15" and 
+                    not result.get('updateAvailable', False)):
+                    print("🔄 No Android 15 updates found with standard request, trying alternative methods...")
+                    return self._try_alternative_android15_methods(device_info, full_url, headers)
+                
+                return result
             else:
                 print(f"❌ API request failed with status {response.status_code}")
                 print(f"Response: {response.text}")
+                
+                # If forcing Android 15, try alternative methods even on API failure
+                if self.force_android_version == "15":
+                    print("🔄 Trying alternative Android 15 detection methods...")
+                    return self._try_alternative_android15_methods(device_info, full_url, headers)
+                
                 return None
                 
         except requests.exceptions.RequestException as e:
             print(f"❌ Network error: {e}")
+            
+            # If forcing Android 15, try alternative methods even on network error
+            if self.force_android_version == "15":
+                print("🔄 Network error occurred, trying alternative Android 15 methods...")
+                return self._try_alternative_android15_methods(device_info, full_url, headers)
+            
             return None
+    
+    def _try_alternative_android15_methods(self, device_info: Dict[str, Any], base_url: str, headers: Dict[str, str]) -> Optional[Dict[str, Any]]:
+        """Try alternative methods to find Android 15 updates."""
+        print("🔍 Trying alternative Android 15 detection strategies...")
+        
+        # Strategy 1: Try with different build IDs that might trigger Android 15
+        android15_build_patterns = [
+            "VanillaIceCream",  # Android 15 codename
+            "API35",            # Android 15 API level
+            "35",               # API level
+            "15.0.0",           # Version format
+        ]
+        
+        original_build_id = device_info['build_id']
+        
+        for pattern in android15_build_patterns:
+            print(f"  🧪 Trying with build pattern: {pattern}")
+            
+            # Modify device info for this attempt
+            modified_device_info = device_info.copy()
+            modified_device_info['build_id'] = f"{original_build_id}.{pattern}"
+            
+            # Build payload with Android 15 and modified build ID
+            payload = {
+                "id": modified_device_info['serial'],
+                "contentTimestamp": 0,
+                "deviceInfo": {
+                    "manufacturer": modified_device_info['manufacturer'],
+                    "brand": modified_device_info['brand'],
+                    "model": modified_device_info['model'],
+                    "product": modified_device_info['product'],
+                    "device": modified_device_info['device'],
+                    "hardware": modified_device_info['hardware'],
+                    "osVersion": "15",
+                    "buildId": modified_device_info['build_id']
+                },
+                "extraInfo": {
+                    "forceAndroid15": True,
+                    "prerelease": True
+                },
+                "identityInfo": {
+                    "imei": modified_device_info['imei'],
+                    "meid": modified_device_info['meid'],
+                    "serial": modified_device_info['serial']
+                },
+                "triggeredBy": "manual_android15_check",
+                "idType": "serialNumber"
+            }
+            
+            try:
+                response = requests.post(base_url, json=payload, headers=headers, timeout=30)
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get('updateAvailable', False):
+                        print(f"  ✅ Found Android 15 update with pattern: {pattern}")
+                        return result
+                    else:
+                        print(f"  ❌ No updates with pattern: {pattern}")
+                else:
+                    print(f"  ❌ API error with pattern {pattern}: {response.status_code}")
+            except Exception as e:
+                print(f"  ❌ Network error with pattern {pattern}: {e}")
+        
+        # Strategy 2: Try different API endpoints that might have Android 15
+        alternative_endpoints = [
+            "https://moto-cds.appspot.com/cds/upgrade/2/check/ctx/ota/key",  # Version 2 API
+            "https://moto-cds.appspot.com/cds/upgrade/1/check/ctx/prerelease/key",  # Prerelease endpoint
+            "https://moto-cds.appspot.com/cds/upgrade/1/check/ctx/beta/key",  # Beta endpoint
+        ]
+        
+        for endpoint in alternative_endpoints:
+            print(f"  🌐 Trying alternative endpoint: {endpoint}")
+            alt_url = f"{endpoint}/{device_info['build_guid']}"
+            
+            payload = self.build_api_payload(device_info)
+            payload['extraInfo']['android15Request'] = True
+            payload['extraInfo']['prerelease'] = True
+            
+            try:
+                response = requests.post(alt_url, json=payload, headers=headers, timeout=30)
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get('updateAvailable', False):
+                        print(f"  ✅ Found Android 15 update via alternative endpoint!")
+                        return result
+                    else:
+                        print(f"  ❌ No updates via alternative endpoint")
+                else:
+                    print(f"  ❌ Alternative endpoint error: {response.status_code}")
+            except Exception as e:
+                print(f"  ❌ Alternative endpoint network error: {e}")
+        
+        print("❌ No Android 15 updates found via alternative methods")
+        return None
     
     def download_ota(self, download_url: str, filename: str) -> bool:
         """Download the OTA file."""
@@ -207,6 +342,8 @@ class MotorolaOTAChecker:
     def run(self):
         """Main execution method."""
         print("🚀 Motorola OTA Checker")
+        if self.force_android_version:
+            print(f"🎯 Targeting Android {self.force_android_version}")
         print("=" * 30)
         
         # Check ADB connection
@@ -226,6 +363,21 @@ class MotorolaOTAChecker:
             print("❌ Could not retrieve device serial number")
             sys.exit(1)
         
+        # Show current vs target version info
+        if self.force_android_version:
+            current_version = device_info.get('os_version', 'Unknown')
+            target_version = self.android_version_map.get(self.force_android_version, self.force_android_version)
+            print(f"\n📊 Version Info:")
+            print(f"  Current Android: {current_version}")
+            print(f"  Target Android: {target_version}")
+            
+            if current_version == target_version:
+                print("⚠️  Warning: Device is already on target Android version")
+                user_input = input("Continue anyway? (y/N): ").lower()
+                if user_input not in ['y', 'yes']:
+                    print("🛑 Operation cancelled")
+                    sys.exit(0)
+        
         # Check for updates
         response = self.check_for_updates(device_info)
         
@@ -237,8 +389,62 @@ class MotorolaOTAChecker:
 
 def main():
     """Main entry point."""
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description="Motorola OTA Checker - Check and download OTA updates for Motorola devices",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python3 motorola_ota_checker.py                    # Check for updates normally
+  python3 motorola_ota_checker.py --force-android 15 # Force check for Android 15
+  python3 motorola_ota_checker.py --force-android 14 # Force check for Android 14
+  python3 motorola_ota_checker.py --interactive      # Interactive mode to select version
+        """
+    )
+    
+    parser.add_argument(
+        '--force-android', 
+        type=str, 
+        choices=['10', '11', '12', '13', '14', '15'],
+        help='Force check for specific Android version (10, 11, 12, 13, 14, 15)'
+    )
+    
+    parser.add_argument(
+        '--interactive', 
+        action='store_true',
+        help='Interactive mode to select Android version'
+    )
+    
+    args = parser.parse_args()
+    
+    force_version = args.force_android
+    
+    # Interactive mode
+    if args.interactive:
+        print("🎯 Interactive Android Version Selection")
+        print("=" * 40)
+        print("Available Android versions:")
+        versions = ['10', '11', '12', '13', '14', '15']
+        for i, version in enumerate(versions, 1):
+            print(f"  {i}. Android {version}")
+        print("  0. Use device's current version")
+        
+        try:
+            choice = input("\nSelect version (0-6): ").strip()
+            if choice == '0':
+                force_version = None
+            elif choice.isdigit() and 1 <= int(choice) <= 6:
+                force_version = versions[int(choice) - 1]
+            else:
+                print("❌ Invalid selection")
+                sys.exit(1)
+        except (ValueError, KeyboardInterrupt):
+            print("\n❌ Invalid input or cancelled")
+            sys.exit(1)
+    
     try:
-        checker = MotorolaOTAChecker()
+        checker = MotorolaOTAChecker(force_android_version=force_version)
         checker.run()
     except KeyboardInterrupt:
         print("\n\n⏹️  Operation cancelled by user")
@@ -249,4 +455,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
